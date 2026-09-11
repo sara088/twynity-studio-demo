@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Twynity Changelog</title>
+    <link>https://twynity.design.4th-ir.com/changelog</link>
+    <description>Everything new, improved, and fixed in Twynity.</description>
+    <language>en</language>
+    <item>
+      <title>Your studio, your way (v1.5.0)</title>
+      <link>https://twynity.design.4th-ir.com/changelog#summer-2026</link>
+      <guid isPermaLink="false">twynity-v1.5.0</guid>
+      <pubDate>Wed, 08 Jul 2026 00:00:00 GMT</pubDate>
+      <description>Start a twyn in the mode you want, upgrade without losing your footage, and always know where you stand on credits.</description>
+    </item>
+    <item>
+      <title>Avatars that move, and a clearer upgrade moment (v1.4.0)</title>
+      <link>https://twynity.design.4th-ir.com/changelog#avatars-and-upgrade</link>
+      <guid isPermaLink="false">twynity-v1.4.0</guid>
+      <pubDate>Mon, 15 Jun 2026 00:00:00 GMT</pubDate>
+      <description>Free twyns now come to life with a ready-made moving avatar, and the path to making one truly yours got a lot clearer.</description>
+    </item>
+    <item>
+      <title>Onboarding &amp; tiers (v1.3.0)</title>
+      <link>https://twynity.design.4th-ir.com/changelog#onboarding-and-tiers</link>
+      <guid isPermaLink="false">twynity-v1.3.0</guid>
+      <pubDate>Sun, 24 May 2026 00:00:00 GMT</pubDate>
+      <description>A guided two-video capture, voice recording in the same flow, and a free trial that never puts a paywall in your way.</description>
+    </item>
+    <item>
+      <title>Studio foundations (v1.2.0)</title>
+      <link>https://twynity.design.4th-ir.com/changelog#studio-foundations</link>
+      <guid isPermaLink="false">twynity-v1.2.0</guid>
+      <pubDate>Fri, 17 Apr 2026 00:00:00 GMT</pubDate>
+      <description>The live studio, the equip panel, and the marketplace — the core of talking to and teaching your twyn.</description>
+    </item>
+  </channel>
+</rss>

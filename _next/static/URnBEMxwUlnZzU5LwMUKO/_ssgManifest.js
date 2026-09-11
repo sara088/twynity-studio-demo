@@ -1,0 +1,1 @@
+self.__SSG_MANIFEST=new Set(["\u002Fmarketplace\u002F[category]","\u002Fmy-twyns\u002F[id]","\u002Foauth\u002F[provider]","\u002Ftalk\u002F[id]","\u002Fteams\u002F[id]","\u002Fteams\u002F[id]\u002Fchat","\u002Fwhats-new\u002F[slug]"]);self.__SSG_MANIFEST_CB&&self.__SSG_MANIFEST_CB()
