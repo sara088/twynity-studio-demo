@@ -1,13 +1,12 @@
 "use client";
 
 // ─────────────────────────────────────────────────────────────────────────
-// The demo CRM — one source of truth behind every MCP app.
+// The demo CRM — one source of truth behind every app in the Canvas.
 //
-// This stands in for what `frappe-crm-mcp` would return. The apps don't hold
-// state of their own: the board, the gate and the lead capture all read this,
-// so advancing a deal in the gate moves its card on the board, and converting
-// a lead puts a new card in Identified. That coherence is the point — four
-// apps over one dataset, not four demos.
+// This stands in for what a Frappe CRM MCP server would return. The apps hold
+// no state of their own: the board, the deal record and the lead capture all
+// read this, so dragging a card updates the twyn's summary and the record
+// behind it. Three views, one dataset — not three demos.
 //
 // Deliberately in-memory rather than the usual localStorage store (see
 // shared/lib/tier.ts): a demo should start from a known state every reload,
@@ -16,150 +15,115 @@
 
 import { useSyncExternalStore } from "react";
 
+/** The sales journey as Lee actually runs it. */
 export type StageId =
-  | "identified" | "qualified" | "discovery" | "demo"
-  | "design" | "proposal" | "commercial";
+  | "called" | "meeting" | "demo" | "contract" | "closed" | "onboarded";
 
 export interface Stage {
   value: StageId;
   label: string;
-  /** Default probability — Bernie's configured pipeline. */
+  /** What "done" means for this column — shown under the heading. */
+  meaning: string;
   probability: number;
 }
 
 export const STAGES: Stage[] = [
-  { value: "identified", label: "Identified", probability: 5 },
-  { value: "qualified", label: "Qualified", probability: 15 },
-  { value: "discovery", label: "Discovery", probability: 25 },
-  { value: "demo", label: "Capability Demo", probability: 35 },
-  { value: "design", label: "Solution Design", probability: 50 },
-  { value: "proposal", label: "Proposal", probability: 65 },
-  { value: "commercial", label: "Commercial Neg.", probability: 80 },
+  { value: "called",    label: "Called",     meaning: "first contact made", probability: 10 },
+  { value: "meeting",   label: "Meeting",    meaning: "first meeting done", probability: 30 },
+  { value: "demo",      label: "Demo",       meaning: "they've seen it",    probability: 50 },
+  { value: "contract",  label: "Contract",   meaning: "sent, awaiting sig", probability: 75 },
+  { value: "closed",    label: "Closed won", meaning: "signed",             probability: 100 },
+  { value: "onboarded", label: "Onboarded",  meaning: "up and running",     probability: 100 },
 ];
 
-export const SERVICE_LINES = ["EAIW", "AISC", "ITWC", "TADS"] as const;
-export type ServiceLine = (typeof SERVICE_LINES)[number];
+export const stageOf = (id: StageId) => STAGES.find((s) => s.value === id)!;
 
-/** Stage-rot limit in days, per service line. Playbook §5. */
-export const ROT_LIMIT: Record<ServiceLine, number> = {
-  AISC: 10, EAIW: 15, ITWC: 20, TADS: 15,
-};
+export const TRADES = ["Plumbing", "Electrical", "HVAC", "Roofing", "Landscaping"] as const;
+export type Trade = (typeof TRADES)[number];
+
+/** Days without contact before a deal counts as gone quiet. */
+export const STALE_AFTER = 7;
 
 export interface Deal {
   id: string;
-  name: string;
-  account: string;
+  company: string;
+  contact: string;
+  phone: string;
   stage: StageId;
   value: number | null;
-  line: ServiceLine;
-  /** Days in the current stage. */
+  trade: Trade;
+  /** Days since anything was logged against it. */
   days: number;
   owner: string;
 }
 
-export type CriterionState = "done" | "drafted" | "todo";
+export type ActivityKind = "call" | "meeting" | "demo" | "contract" | "note";
 
-export interface Criterion {
+export interface Activity {
   id: string;
-  label: string;
-  value?: string;
-  state: CriterionState;
-  /** Where the twyn found it — intra-Frappe only. */
-  source?: string;
-  tag: string;
-  /** Only a person can satisfy this; the twyn must not fill it. */
-  humanOnly?: boolean;
+  dealId: string;
+  kind: ActivityKind;
+  text: string;
+  when: string;
 }
 
 export interface LeadState {
   owner: string | null;
-  duplicate: "unresolved" | "linked" | "separate";
   created: boolean;
-  converted: boolean;
 }
 
 export interface CrmState {
   deals: Deal[];
-  /** Exit criteria for the deal's *current* stage, keyed by deal id. */
-  criteria: Record<string, Criterion[]>;
-  drafts: Record<string, { body: string; meta: string }>;
+  activity: Activity[];
   lead: LeadState;
 }
 
-export const OWNERS = ["Bernie Adjei", "Nana Owusu", "Admin User"];
+export const OWNERS = ["Lee Carter", "Nolan Reed", "Dana Whitfield"];
 
 // ── Seed ────────────────────────────────────────────────────────────────
 const SEED_DEALS: Deal[] = [
-  { id: "d-ecobank", name: "AI Compliance Monitor", account: "EcoBank Ghana",
-    stage: "identified", value: null, line: "AISC", days: 2, owner: "Bernie Adjei" },
-  { id: "d-techvision", name: "AI Strategy Engagement", account: "TechVision Ltd",
-    stage: "qualified", value: 120000, line: "AISC", days: 14, owner: "Bernie Adjei" },
-  { id: "d-stanbic", name: "Data Operations Review", account: "Stanbic Bank",
-    stage: "qualified", value: 60000, line: "AISC", days: 5, owner: "Nana Owusu" },
-  { id: "d-volta", name: "Operations Intelligence Twyn", account: "Volta River Authority",
-    stage: "discovery", value: null, line: "EAIW", days: 7, owner: "Bernie Adjei" },
-  { id: "d-meridian", name: "Clinical Decision Support", account: "Meridian Health Systems",
-    stage: "proposal", value: null, line: "ITWC", days: 3, owner: "Nana Owusu" },
-  { id: "d-nexus", name: "AI Document Processing", account: "Nexus Corp International",
-    stage: "commercial", value: null, line: "EAIW", days: 1, owner: "Bernie Adjei" },
+  { id: "d-bobs", company: "Bob's Plumbing", contact: "Bob Ferraro",
+    phone: "(415) 555-0142", stage: "called", value: 4800, trade: "Plumbing",
+    days: 9, owner: "Lee Carter" },
+  { id: "d-halvorsen", company: "Halvorsen Electric", contact: "Ingrid Halvorsen",
+    phone: "(415) 555-0188", stage: "meeting", value: 7200, trade: "Electrical",
+    days: 2, owner: "Lee Carter" },
+  { id: "d-cascade", company: "Cascade Heating & Air", contact: "Marcus Oyelaran",
+    phone: "(503) 555-0119", stage: "meeting", value: 12000, trade: "HVAC",
+    days: 4, owner: "Dana Whitfield" },
+  { id: "d-ridgeline", company: "Ridgeline Roofing", contact: "Tom Beaudry",
+    phone: "(503) 555-0177", stage: "demo", value: 9600, trade: "Roofing",
+    days: 1, owner: "Lee Carter" },
+  { id: "d-verdant", company: "Verdant Grounds", contact: "Priya Raman",
+    phone: "(415) 555-0164", stage: "contract", value: 15400, trade: "Landscaping",
+    days: 3, owner: "Lee Carter" },
+  { id: "d-pipeworks", company: "Pipeworks Co.", contact: "Sal Mendes",
+    phone: "(206) 555-0130", stage: "closed", value: 6300, trade: "Plumbing",
+    days: 6, owner: "Dana Whitfield" },
 ];
 
-// TechVision is the worked example — four criteria the twyn found in Frappe's
-// own call logs and contact records, one it drafted, one only a person can do.
-const TECHVISION_CRITERIA: Criterion[] = [
-  { id: "c-problem", label: "Business problem captured",
-    value: "“Manual document review costs $2M/yr”", state: "done",
-    source: "from your call log, 14 Aug", tag: "Filled" },
-  { id: "c-buyer", label: "Economic buyer identified",
-    value: "Kwame Asante · Chief Data Officer", state: "done",
-    source: "from the contact record", tag: "Filled" },
-  { id: "c-budget", label: "Budget status recorded", value: "Budget being sought",
-    state: "done", source: "from your call log, 22 Aug", tag: "Filled" },
-  { id: "c-value", label: "Estimated value entered", value: "$120,000 USD",
-    state: "done", tag: "On record" },
-  { id: "c-timeline", label: "Timeline driver recorded",
-    value: "Drafted below — needs your approval", state: "drafted", tag: "Drafted" },
-  { id: "c-interaction", label: "Two-way interaction logged",
-    value: "Only you can log this — a call or a meeting. Emails don't count.",
-    state: "todo", tag: "Needs you", humanOnly: true },
+const SEED_ACTIVITY: Activity[] = [
+  { id: "a1", dealId: "d-bobs", kind: "call", when: "2 Sep",
+    text: "Cold call. Bob picked up — runs six vans, still books jobs on paper. Asked me to call back after the holiday." },
+  { id: "a2", dealId: "d-halvorsen", kind: "call", when: "6 Sep",
+    text: "Ingrid called us. Found us through the Cascade referral." },
+  { id: "a3", dealId: "d-halvorsen", kind: "meeting", when: "9 Sep",
+    text: "First meeting. Twelve sparkies, scheduling is the pain — double-booked two jobs last month." },
+  { id: "a4", dealId: "d-cascade", kind: "meeting", when: "7 Sep",
+    text: "Marcus wants his dispatchers off the whiteboard before winter." },
+  { id: "a5", dealId: "d-ridgeline", kind: "demo", when: "10 Sep",
+    text: "Demo went well. Tom's question was whether it works offline on a roof — it does." },
+  { id: "a6", dealId: "d-verdant", kind: "contract", when: "8 Sep",
+    text: "Contract sent. Priya said she'd sign once her partner reviews it." },
+  { id: "a7", dealId: "d-pipeworks", kind: "contract", when: "5 Sep",
+    text: "Signed. Sal wants onboarding before the end of the month." },
 ];
-
-/** Every other deal gets a plausible gate for its stage, so any card opens. */
-function genericCriteria(deal: Deal): Criterion[] {
-  return [
-    { id: "g-problem", label: "Business problem captured",
-      value: deal.value ? "Captured in discovery notes" : "Nothing on record yet",
-      state: deal.value ? "done" : "todo",
-      source: deal.value ? "from your call log" : undefined,
-      tag: deal.value ? "Filled" : "Needs you" },
-    { id: "g-buyer", label: "Economic buyer identified",
-      value: "Named on the account", state: "done",
-      source: "from the contact record", tag: "Filled" },
-    { id: "g-value", label: "Estimated value entered",
-      value: deal.value ? `$${deal.value.toLocaleString("en-US")} USD` : "No value entered",
-      state: deal.value ? "done" : "todo", tag: deal.value ? "On record" : "Needs you" },
-    { id: "g-interaction", label: "Two-way interaction logged",
-      value: "Only you can log this — a call or a meeting.",
-      state: "todo", tag: "Needs you", humanOnly: true },
-  ];
-}
 
 function seed(): CrmState {
-  const criteria: Record<string, Criterion[]> = {};
-  for (const d of SEED_DEALS) {
-    criteria[d.id] =
-      d.id === "d-techvision" ? TECHVISION_CRITERIA.map((c) => ({ ...c })) : genericCriteria(d);
-  }
   return {
     deals: SEED_DEALS.map((d) => ({ ...d })),
-    criteria,
-    drafts: {
-      "d-techvision": {
-        body: "“Regulatory review lands in Q1 and Kwame wants the compliance workload cut before it does. He named the January board as the forcing date.”",
-        meta: "Composed from two call logs, 14 and 22 August. Nothing is written to the deal until you approve it.",
-      },
-    },
-    lead: { owner: null, duplicate: "unresolved", created: false, converted: false },
+    activity: SEED_ACTIVITY.map((a) => ({ ...a })),
+    lead: { owner: null, created: false },
   };
 }
 
@@ -178,7 +142,6 @@ const subscribe = (cb: () => void) => {
 };
 const getSnapshot = () => state;
 
-/** Subscribe a component to the demo CRM. */
 export function useCrm(): CrmState {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
@@ -186,144 +149,86 @@ export function useCrm(): CrmState {
 export const getCrm = () => state;
 
 // ── Derived ─────────────────────────────────────────────────────────────
-export const rotLimit = (d: Deal) => ROT_LIMIT[d.line];
-export const isRotten = (d: Deal) => d.days > rotLimit(d);
-export const stageOf = (id: StageId) => STAGES.find((s) => s.value === id)!;
+export const isStale = (d: Deal) =>
+  d.days > STALE_AFTER && d.stage !== "closed" && d.stage !== "onboarded";
 
-export function pipelineTotals(deals: Deal[]) {
-  const total = deals.reduce((n, d) => n + (d.value ?? 0), 0);
-  const weighted = Math.round(
-    deals.reduce((n, d) => n + (d.value ?? 0) * (stageOf(d.stage).probability / 100), 0)
-  );
-  return { total, weighted, flagged: deals.filter(isRotten).length, open: deals.length };
+export function totals(deals: Deal[]) {
+  const live = deals.filter((d) => d.stage !== "onboarded");
+  return {
+    open: live.length,
+    total: live.reduce((n, d) => n + (d.value ?? 0), 0),
+    weighted: Math.round(
+      live.reduce((n, d) => n + (d.value ?? 0) * (stageOf(d.stage).probability / 100), 0)
+    ),
+    stale: deals.filter(isStale).length,
+  };
 }
 
-export function gateReady(criteria: Criterion[]) {
-  return criteria.every((c) => c.state === "done");
-}
+export const activityFor = (s: CrmState, dealId: string) =>
+  s.activity.filter((a) => a.dealId === dealId);
 
-/** The stage a deal would advance to, or null at the end of the pipeline. */
-export function nextStage(deal: Deal): Stage | null {
-  const i = STAGES.findIndex((s) => s.value === deal.stage);
-  return i >= 0 && i < STAGES.length - 1 ? STAGES[i + 1] : null;
-}
-
-// ── Mutations — what the "write" tools do ───────────────────────────────
-
-/** Approve a drafted criterion. Draft-and-propose: only a person does this. */
-export function approveDraft(dealId: string) {
-  const criteria = state.criteria[dealId];
-  if (!criteria) return;
-  set({
-    ...state,
-    criteria: {
-      ...state.criteria,
-      [dealId]: criteria.map((c) =>
-        c.state === "drafted"
-          ? { ...c, state: "done", tag: "Approved", value: "Approved by you just now" }
-          : c
-      ),
-    },
-  });
-}
-
-/** Log the two-way interaction only a person can log. */
-export function logInteraction(dealId: string) {
-  const criteria = state.criteria[dealId];
-  if (!criteria) return;
-  set({
-    ...state,
-    criteria: {
-      ...state.criteria,
-      [dealId]: criteria.map((c) =>
-        c.humanOnly
-          ? { ...c, state: "done", tag: "Logged",
-              value: "Discovery call logged by you just now" }
-          : c
-      ),
-    },
-  });
-}
-
-/** Fill a criterion the twyn couldn't infer (generic gates). */
-export function satisfyCriterion(dealId: string, criterionId: string) {
-  const criteria = state.criteria[dealId];
-  if (!criteria) return;
-  set({
-    ...state,
-    criteria: {
-      ...state.criteria,
-      [dealId]: criteria.map((c) =>
-        c.id === criterionId
-          ? { ...c, state: "done", tag: "Filled", value: "Recorded by you just now" }
-          : c
-      ),
-    },
-  });
-}
+// ── Mutations ───────────────────────────────────────────────────────────
 
 /**
- * Advance a deal. Refuses unless every criterion is met — the gate is enforced
- * here, not only in the button's disabled state.
+ * Move a deal to a stage. Logs the move and resets the staleness clock, so
+ * dragging a card is a real event rather than just a visual change.
  */
-export function advanceDeal(dealId: string): Stage | null {
+export function moveDeal(dealId: string, to: StageId): Stage | null {
   const deal = state.deals.find((d) => d.id === dealId);
-  const criteria = state.criteria[dealId];
-  if (!deal || !criteria || !gateReady(criteria)) return null;
-  const next = nextStage(deal);
-  if (!next) return null;
-  const moved: Deal = { ...deal, stage: next.value, days: 0 };
+  if (!deal || deal.stage === to) return null;
+  const stage = stageOf(to);
   set({
     ...state,
-    deals: state.deals.map((d) => (d.id === dealId ? moved : d)),
-    // A new stage means a new gate.
-    criteria: { ...state.criteria, [dealId]: genericCriteria(moved) },
+    deals: state.deals.map((d) => (d.id === dealId ? { ...d, stage: to, days: 0 } : d)),
+    activity: [
+      { id: `a-${Date.now()}`, dealId, when: "just now",
+        kind: to === "contract" ? "contract" : to === "demo" ? "demo" : "note",
+        text: `Moved to ${stage.label} — ${stage.meaning}.` },
+      ...state.activity,
+    ],
   });
-  return next;
+  return stage;
 }
 
-export function resolveDuplicate(choice: "linked" | "separate") {
-  set({ ...state, lead: { ...state.lead, duplicate: choice } });
+/** Log a call, meeting or note against a deal. Resets staleness. */
+export function logActivity(dealId: string, kind: ActivityKind, text: string) {
+  if (!state.deals.some((d) => d.id === dealId)) return;
+  set({
+    ...state,
+    deals: state.deals.map((d) => (d.id === dealId ? { ...d, days: 0 } : d)),
+    activity: [
+      { id: `a-${Date.now()}`, dealId, kind, when: "just now", text },
+      ...state.activity,
+    ],
+  });
 }
 
 export function assignLeadOwner(owner: string) {
   set({ ...state, lead: { ...state.lead, owner } });
 }
 
-export function createLead() {
-  if (!state.lead.owner) return false;
-  set({ ...state, lead: { ...state.lead, created: true } });
-  return true;
-}
-
-/**
- * Convert the lead to an opportunity at Stage 1 — the mockup's own rule:
- * "On status → Qualified, show Convert Lead which creates Account + Contact +
- * Opportunity at Stage: Identified."
- */
-export function convertLead(): Deal | null {
-  if (!state.lead.created || state.lead.converted) return null;
+/** Create the captured lead as a deal in Called. */
+export function createLead(): Deal | null {
+  if (!state.lead.owner || state.lead.created) return null;
   const deal: Deal = {
-    id: "d-ashanti",
-    name: "Document Processing — compliance",
-    account:
-      state.lead.duplicate === "linked" ? "Ashanti Gold Ltd" : "Ashanti Gold Refinery",
-    stage: "identified",
-    value: null,
-    line: "EAIW",
-    days: 0,
-    owner: state.lead.owner ?? "Bernie Adjei",
+    id: "d-summit", company: "Summit Mechanical", contact: "Dee Kowalski",
+    phone: "(206) 555-0198", stage: "called", value: 5200, trade: "HVAC",
+    days: 0, owner: state.lead.owner,
   };
   set({
     ...state,
     deals: [...state.deals, deal],
-    criteria: { ...state.criteria, [deal.id]: genericCriteria(deal) },
-    lead: { ...state.lead, converted: true },
+    activity: [
+      { id: `a-${Date.now()}`, dealId: deal.id, kind: "call", when: "just now",
+        text: "Cold call logged from the conversation. Dee asked for a callback Thursday." },
+      ...state.activity,
+    ],
+    lead: { ...state.lead, created: true },
   });
   return deal;
 }
 
-/** Back to the seeded pipeline — so a demo always starts from the same place. */
+/** Back to the seeded pipeline, so a demo always starts the same way. */
 export function resetCrm() {
   set(seed());
 }

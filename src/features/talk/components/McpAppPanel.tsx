@@ -13,14 +13,16 @@
 // and scroll intact, because the board was never unmounted from the stack.
 // ─────────────────────────────────────────────────────────────────────────
 
-import { ChevronLeft, ChevronRight, CheckSquare, Kanban, RotateCcw, UserPlus, X } from "lucide-react";
+import {
+  ChevronLeft, ChevronRight, CreditCard, Kanban, RotateCcw, UserPlus, Wrench, X,
+} from "lucide-react";
 
 import { AppCanvas } from "@/components/mcp-kit/AppRenderer";
 import { cn } from "@/lib/utils";
 import { getApp, type Intent } from "../data/mcp-apps";
 import { useCrm } from "../lib/crm-store";
 
-const ICONS = { board: Kanban, person: UserPlus, check: CheckSquare } as const;
+const ICONS = { board: Kanban, person: UserPlus, card: CreditCard, wrench: Wrench } as const;
 
 /** One entry in the Canvas navigation stack. */
 export interface AppFrame {

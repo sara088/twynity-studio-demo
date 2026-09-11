@@ -1,23 +1,22 @@
 // ─────────────────────────────────────────────────────────────────────────
-// MCP apps — described, not built.
+// Canvas apps — described, not built.
 //
-// A server returns two things: its rows (the tool result) and a *description*
-// of how to show them. Twynity renders the description with its own components,
-// so an app is native by construction — it never ships styling of its own.
+// A tool returns two things: its rows and a *description* of how to show them.
+// The Canvas renders the description with Twynity's own components, so an app
+// is native by construction — it never ships styling of its own.
 //
 // Two rules this file keeps:
-//   1. `blocks` are static. Only `data()` changes between calls — exactly like
-//      a real MCP tool returning fresh structuredContent each invocation.
-//   2. Interaction is declared, never coded. An action carries an *intent*
-//      ("advance this deal"); TalkView decides what that means. No app here
-//      knows about React state, the Canvas, or the chat thread.
+//   1. `blocks` are static. Only `data()` changes between calls, exactly like a
+//      real tool returning fresh structuredContent each invocation.
+//   2. Interaction is declared, never coded. A control carries an *intent*
+//      ("move this deal"); TalkView decides what that means. Nothing here knows
+//      about React state, the Canvas, or the chat thread.
 //
 // Adding a fifth app means adding a descriptor below. Nothing else.
 // ─────────────────────────────────────────────────────────────────────────
 
 import {
-  OWNERS, STAGES, gateReady, isRotten, nextStage, pipelineTotals, rotLimit,
-  stageOf, type CrmState,
+  OWNERS, STAGES, activityFor, isStale, stageOf, totals, type CrmState,
 } from "../lib/crm-store";
 
 /** "$.path" reads the tool result; "{{ field }}" interpolates a row. */
@@ -29,10 +28,7 @@ export type Intent =
   | { kind: "open"; app: string; deal?: string }
   | {
       kind: "tool";
-      op:
-        | "approveDraft" | "logInteraction" | "satisfy" | "advance"
-        | "resolveDuplicate" | "assignOwner" | "createLead" | "convertLead"
-        | "reset";
+      op: "move" | "logCall" | "logMeeting" | "assignOwner" | "createLead" | "reset";
       deal?: Binding;
       value?: Binding;
     };
@@ -83,26 +79,28 @@ export type Block = BaseBlock &
         type: "board";
         data: string;
         groupBy: string;
-        /** Column sets, keyed by the groupBy field currently in play. */
         columnSets: Record<string, { value: string; label: string; meta?: Binding }[]>;
         rankBy: { field: string; direction?: "asc" | "desc" };
         card: CardSpec;
-        flag?: { field: string; overField: string; chip: Binding };
+        flag?: { field: string; over: number; chip: Binding };
         onCardClick?: Intent;
+        /** Dragging a card to another column emits this with `value` set to the
+         *  target column. Omit it and the board is read-only. */
+        onCardDrop?: Intent;
         emptyLabel?: string;
       }
     | { type: "fields"; label?: string; tone?: "read" | "inferred" | "needs"; items: FieldSpec[] }
-    | { type: "criteria"; label?: string; data: string; action?: ActionSpec }
+    | { type: "timeline"; label?: string; data: string }
+    | { type: "keyvalue"; label?: string; data: string }
     | { type: "notice"; tone: "good" | "warn"; text: Binding; actions?: ActionSpec[] }
-    | { type: "draft"; label: string; body: Binding; meta?: Binding }
   );
 
 export interface AppDescriptor {
   id: string;
-  /** May interpolate from data, e.g. "{{ from }} → {{ to }}". */
+  /** May interpolate from data, e.g. "{{ company }}". */
   title: Binding;
   subtitle?: Binding;
-  icon: "board" | "person" | "check";
+  icon: "board" | "person" | "card" | "wrench";
   triggers: string[];
   /** What the twyn says. May interpolate from data. */
   reply: Binding;
@@ -116,84 +114,142 @@ export interface AppDescriptor {
 
 const money = (n: number) => `$${n.toLocaleString("en-US")}`;
 
-// ── 1 · Show me the pipeline ────────────────────────────────────────────
+// ── 1 · The pipeline ────────────────────────────────────────────────────
 const STAGE_COLUMNS = STAGES.map((s) => ({
   value: s.value,
   label: s.label,
-  meta: `${s.probability}%`,
+  meta: s.meaning,
 }));
 
-const LINE_COLUMNS = [
-  { value: "EAIW", label: "EAIW", meta: "Enterprise AI Workforce" },
-  { value: "AISC", label: "AISC", meta: "AI Strategy & Consulting" },
-  { value: "ITWC", label: "ITWC", meta: "Individual Twyn Creation" },
-  { value: "TADS", label: "TADS", meta: "Teams & Dev Services" },
-];
+const OWNER_COLUMNS = OWNERS.map((o) => ({
+  value: o,
+  label: o.split(" ")[0],
+  meta: o.split(" ")[1],
+}));
 
 const PIPELINE: AppDescriptor = {
   id: "crm.pipeline",
   title: "Pipeline",
-  subtitle: "{{ open }} open · {{ totalLabel }} · click a card to work it",
+  subtitle: "{{ open }} live · {{ totalLabel }} · drag a card to move it",
   icon: "board",
-  triggers: ["show me the pipeline", "show the pipeline", "the pipeline", "pipeline"],
-  reply:
-    "**{{ totalLabel }}** across {{ open }} open deals. {{ flaggedLine }}",
+  triggers: ["show me the pipeline", "show the pipeline", "my pipeline", "pipeline", "the board"],
+  reply: "**{{ totalLabel }}** across {{ open }} live deals. {{ staleLine }}",
   inline: [
     { type: "figures", items: [
-      { label: "Open", value: "$.total", format: "currency.usd" },
+      { label: "Live", value: "$.totalLabel" },
       { label: "Weighted", value: "$.weighted", format: "currency.usd" },
-      { label: "Flagged", value: "$.flagged", warnWhenSet: true },
+      { label: "Gone quiet", value: "$.stale", warnWhenSet: true },
     ] },
   ],
   canvas: [
     { type: "board",
       data: "$.deals",
       groupBy: "stage",
-      columnSets: { stage: STAGE_COLUMNS, line: LINE_COLUMNS },
+      columnSets: { stage: STAGE_COLUMNS, owner: OWNER_COLUMNS },
       rankBy: { field: "value", direction: "desc" },
       card: {
-        title: "{{ name }}",
-        subtitle: "{{ account }}",
+        title: "{{ company }}",
+        subtitle: "{{ contact }}",
         value: { field: "value", format: "currency.usd", emptyLabel: "No value yet" },
-        chips: ["{{ line }}", "{{ days }}d"],
+        chips: ["{{ trade }}", "{{ days }}d quiet"],
       },
-      flag: { field: "days", overField: "rot", chip: "{{ days }}d · limit {{ rot }}" },
-      onCardClick: { kind: "open", app: "crm.stage.gate" },
+      flag: { field: "days", over: 7, chip: "{{ days }} days quiet" },
+      onCardClick: { kind: "open", app: "crm.deal" },
+      onCardDrop: { kind: "tool", op: "move" },
       emptyLabel: "Nothing here",
     },
   ],
   actions: [
-    { label: "Group by service line", do: { kind: "rebind", groupBy: "line" } },
-    { label: "Work {{ topFlagName }}", primary: true, when: "flagged",
-      do: { kind: "open", app: "crm.stage.gate", deal: "$.topFlagId" } },
+    { label: "Group by rep", do: { kind: "rebind", groupBy: "owner" } },
+    { label: "Chase {{ staleName }}", primary: true, when: "stale",
+      do: { kind: "open", app: "crm.deal", deal: "$.staleId" } },
   ],
-  footNote: "Read from Frappe CRM · just now",
+  footNote: "Six stages, as Lee runs them · drag between columns to move a deal",
   data: (s) => {
-    const totals = pipelineTotals(s.deals);
-    const flaggedDeals = s.deals.filter(isRotten);
-    const top = flaggedDeals[0];
+    const t = totals(s.deals);
+    const stalest = s.deals.filter(isStale).sort((a, b) => b.days - a.days)[0];
     return {
-      ...totals,
-      totalLabel: money(totals.total),
-      deals: s.deals.map((d) => ({ ...d, rot: rotLimit(d) })),
-      topFlagId: top?.id ?? "",
-      topFlagName: top ? top.account.split(" ")[0] : "",
-      flaggedLine: top
-        ? `${top.account.split(" ")[0]} is the one to look at — ${top.days} days in ${stageOf(top.stage).label}, against the ${top.line} limit of ${rotLimit(top)}.`
-        : "Nothing is past its stage-rot limit.",
+      ...t,
+      totalLabel: money(t.total),
+      deals: s.deals,
+      staleId: stalest?.id ?? "",
+      staleName: stalest ? stalest.company.split(" ")[0] : "",
+      staleLine: stalest
+        ? `${stalest.company} has gone quiet — ${stalest.days} days since anyone logged anything.`
+        : "Nothing has gone quiet.",
     };
   },
 };
 
-// ── 2 · Enter a lead ────────────────────────────────────────────────────
+// ── 2 · A deal record ───────────────────────────────────────────────────
+const DEAL: AppDescriptor = {
+  id: "crm.deal",
+  title: "{{ company }}",
+  subtitle: "{{ contact }} · {{ phone }} · {{ stageLabel }}",
+  icon: "card",
+  triggers: ["open bob", "bob's plumbing", "bobs plumbing", "show me bob"],
+  reply: "{{ replyLine }}",
+  inline: [
+    { type: "figures", items: [
+      { label: "Value", value: "$.valueLabel" },
+      { label: "Stage", value: "$.stageLabel" },
+      { label: "Quiet", value: "$.days" },
+    ] },
+  ],
+  canvas: [
+    { type: "notice", when: "stale", tone: "warn", text: "{{ staleLine }}" },
+    { type: "keyvalue", label: "The account", data: "$.facts" },
+    { type: "timeline", label: "What's happened", data: "$.activity" },
+  ],
+  actions: [
+    { label: "Log a call", do: { kind: "tool", op: "logCall", deal: "$.dealId" } },
+    { label: "Log a meeting", do: { kind: "tool", op: "logMeeting", deal: "$.dealId" } },
+    { label: "Move to {{ nextLabel }}", primary: true, when: "hasNext",
+      do: { kind: "tool", op: "move", deal: "$.dealId", value: "$.nextStage" } },
+  ],
+  footNote: "Everything here is logged against the deal in the CRM.",
+  data: (s, params) => {
+    const deal = s.deals.find((d) => d.id === params?.deal) ?? s.deals[0];
+    const i = STAGES.findIndex((x) => x.value === deal.stage);
+    const next = i >= 0 && i < STAGES.length - 1 ? STAGES[i + 1] : null;
+    const stale = isStale(deal);
+    return {
+      dealId: deal.id,
+      company: deal.company,
+      contact: deal.contact,
+      phone: deal.phone,
+      days: deal.days,
+      stageLabel: stageOf(deal.stage).label,
+      valueLabel: deal.value ? money(deal.value) : "—",
+      nextStage: next?.value ?? "",
+      nextLabel: next?.label ?? "",
+      hasNext: !!next,
+      stale,
+      staleLine: `${deal.days} days since anyone logged anything. Lee's rule is seven.`,
+      facts: [
+        { k: "Contact", v: `${deal.contact} · ${deal.phone}` },
+        { k: "Trade", v: deal.trade },
+        { k: "Deal value", v: deal.value ? money(deal.value) : "Not set" },
+        { k: "Stage", v: `${stageOf(deal.stage).label} — ${stageOf(deal.stage).meaning}` },
+        { k: "Owner", v: deal.owner },
+      ],
+      activity: activityFor(s, deal.id),
+      replyLine: stale
+        ? `**${deal.company}** — ${stageOf(deal.stage).label}, and it's gone quiet for ${deal.days} days. Here's everything on it.`
+        : `**${deal.company}** — ${stageOf(deal.stage).label}. Here's everything on it.`,
+    };
+  },
+};
+
+// ── 3 · Capture a lead from the conversation ────────────────────────────
 const LEAD: AppDescriptor = {
   id: "crm.lead.capture",
   title: "New lead",
   subtitle: "{{ statusLine }}",
   icon: "person",
-  triggers: ["add a lead", "new lead", "enter a lead", "capture a lead", "create a lead"],
+  triggers: ["log a call", "add a lead", "new lead", "log this call", "i called"],
   reply:
-    "Got ten of fourteen fields. One required field still needs you, and there's a near-match on the account — **Ashanti Gold Ltd** already exists. Same company or a different one?",
+    "Got it — **Summit Mechanical**, Dee Kowalski. I pulled the details out of what you said. Pick an owner and I'll put it in the pipeline as Called.",
   inline: [
     { type: "figures", items: [
       { label: "Read", value: "$.read" },
@@ -202,225 +258,121 @@ const LEAD: AppDescriptor = {
     ] },
   ],
   canvas: [
-    { type: "notice", when: "duplicateOpen", tone: "good",
-      text: "Ashanti Gold Ltd already exists as an account — 1 closed-won deal, last touched March 2025. Link this lead to it, or create a separate company?",
-      actions: [
-        { label: "Link to existing",
-          do: { kind: "tool", op: "resolveDuplicate", value: "linked" } },
-        { label: "Separate company",
-          do: { kind: "tool", op: "resolveDuplicate", value: "separate" } },
-      ] },
-    { type: "notice", when: "duplicateResolved", tone: "good", text: "{{ duplicateLabel }}" },
-    { type: "notice", when: "converted", tone: "good",
-      text: "Converted — the opportunity is on your board in Identified." },
-    { type: "fields", label: "What I read from your message", tone: "read", items: [
-      { label: "First name", value: "Kofi", required: true },
-      { label: "Last name", value: "Mensah", required: true },
-      { label: "Email", value: "kofi.mensah@ashantigold.com", required: true },
-      { label: "Phone", value: "+233 24 118 4471" },
-      { label: "Job title", value: "Head of Digital Transformation" },
-      { label: "Company", value: "{{ company }}", required: true },
-      { label: "Lead source", value: "Conference", required: true,
-        source: "from “Africa AI Summit”" },
+    { type: "notice", when: "created", tone: "good",
+      text: "Created — Summit Mechanical is on the board in Called." },
+    { type: "fields", label: "What I heard", tone: "read", items: [
+      { label: "Company", value: "Summit Mechanical", required: true },
+      { label: "Contact", value: "Dee Kowalski", required: true },
+      { label: "Phone", value: "(206) 555-0198", required: true },
+      { label: "Trade", value: "HVAC", source: "from “heating and air”" },
     ] },
-    { type: "fields", label: "What I inferred — check these", tone: "inferred", items: [
-      { label: "Country", value: "Ghana", required: true,
-        source: "guessed from the +233 dialling code" },
-      { label: "Industry", value: "Industrial & Manufacturing",
-        source: "guessed from the company name" },
-      { label: "Service interest", value: "EAIW — Enterprise AI Workforce",
-        source: "guessed from “document processing”" },
+    { type: "fields", label: "What I worked out — check these", tone: "inferred", items: [
+      { label: "Deal value", value: "$5,200", source: "guessed from their van count" },
+      { label: "Next step", value: "Call back Thursday", source: "from “ring me Thursday”" },
     ] },
-    { type: "fields", label: "Only you can answer these", tone: "needs", items: [
-      { label: "Assigned to", required: true, value: "$.owner",
-        choose: { from: "owners", placeholder: "Choose an owner…",
+    { type: "fields", label: "Only you can answer this", tone: "needs", items: [
+      { label: "Owner", required: true, value: "$.owner",
+        choose: { from: "owners", placeholder: "Who's taking it?",
           op: { kind: "tool", op: "assignOwner" } } },
-      { label: "Company size", optional: true },
-      { label: "AI maturity", optional: true },
-      { label: "Status", value: "{{ status }}" },
     ] },
   ],
   actions: [
-    { label: "Edit fields", when: "notCreated" },
-    { label: "Create lead", primary: true, when: "notCreated", enabledWhen: "ready",
+    { label: "Discard", when: "notCreated" },
+    { label: "Add to pipeline", primary: true, when: "notCreated", enabledWhen: "ready",
       do: { kind: "tool", op: "createLead" } },
-    { label: "Convert to opportunity", primary: true, when: "canConvert",
-      do: { kind: "tool", op: "convertLead" } },
+    { label: "Open the board", primary: true, when: "created",
+      do: { kind: "open", app: "crm.pipeline" } },
   ],
   footNote: "{{ footLine }}",
   data: (s) => {
-    const { owner, duplicate, created, converted } = s.lead;
-    const ready = !!owner;
+    const { owner, created } = s.lead;
     return {
-      read: 7, inferred: 3, missing: owner ? 0 : 1,
+      read: 4, inferred: 2, missing: owner ? 0 : 1,
       owners: OWNERS,
       owner: owner ?? "",
-      ready,
+      ready: !!owner,
+      created,
       notCreated: !created,
-      canConvert: created && !converted,
-      converted,
-      duplicateOpen: duplicate === "unresolved",
-      duplicateResolved: duplicate !== "unresolved",
-      duplicateLabel:
-        duplicate === "linked"
-          ? "Linked to the existing Ashanti Gold Ltd account."
-          : "Creating Ashanti Gold Refinery as a separate company.",
-      company: duplicate === "linked" ? "Ashanti Gold Ltd" : "Ashanti Gold Refinery",
-      status: created ? "Qualified" : "New",
-      statusLine: created
-        ? "Lead created in Frappe"
-        : "Nothing is written to Frappe until you create it",
+      statusLine: created ? "Added to the pipeline" : "Nothing is saved until you add it",
       footLine: created
-        ? converted
-          ? "Opportunity created at Stage 1 — Identified."
-          : "Lead created. Converting makes an Account, a Contact and an Opportunity."
-        : ready
-          ? "Ready to create."
-          : "1 required field outstanding",
-    };
-  },
-};
-
-// ── 3 · Move an opportunity ─────────────────────────────────────────────
-const GATE: AppDescriptor = {
-  id: "crm.stage.gate",
-  title: "{{ from }} → {{ to }}",
-  subtitle: "{{ dealLine }}",
-  icon: "check",
-  triggers: [
-    "move techvision to discovery", "move techvision", "advance techvision",
-    "move an opportunity", "advance the deal", "move the deal",
-  ],
-  reply: "{{ replyLine }}",
-  inline: [
-    { type: "figures", items: [
-      { label: "Met", value: "$.met" },
-      { label: "Drafted", value: "$.drafted" },
-      { label: "Needs you", value: "$.blocked", warnWhenSet: true },
-    ] },
-  ],
-  canvas: [
-    { type: "notice", when: "rotten", tone: "warn", text: "{{ rotLine }}" },
-    { type: "notice", when: "ready", tone: "good",
-      text: "All criteria are met. This deal can advance." },
-    { type: "criteria", label: "Exit criteria — {{ from }}", data: "$.criteria",
-      action: { label: "Log the call",
-        do: { kind: "tool", op: "logInteraction", deal: "$.dealId" } } },
-    { type: "draft", when: "hasDraft", label: "Drafted — timeline driver",
-      body: "$.draft.body", meta: "$.draft.meta" },
-  ],
-  actions: [
-    { label: "Approve the draft", when: "hasDraft",
-      do: { kind: "tool", op: "approveDraft", deal: "$.dealId" } },
-    { label: "Advance to {{ to }}", primary: true, enabledWhen: "ready",
-      do: { kind: "tool", op: "advance", deal: "$.dealId" } },
-  ],
-  footNote: "{{ footLine }}",
-  data: (s, params) => {
-    const dealId = params?.deal ?? "d-techvision";
-    const deal = s.deals.find((d) => d.id === dealId) ?? s.deals[0];
-    const criteria = s.criteria[deal.id] ?? [];
-    const ready = gateReady(criteria);
-    const next = nextStage(deal);
-    const draft = s.drafts[deal.id];
-    const hasDraft = !!draft && criteria.some((c) => c.state === "drafted");
-    const blocked = criteria.filter((c) => c.state === "todo").length;
-    const drafted = criteria.filter((c) => c.state === "drafted").length;
-    return {
-      dealId: deal.id,
-      criteria,
-      met: criteria.filter((c) => c.state === "done").length,
-      drafted, blocked,
-      from: stageOf(deal.stage).label,
-      to: next?.label ?? "Closed",
-      dealLine: `${deal.account} — ${deal.name} · ${deal.line}${deal.value ? ` · ${money(deal.value)}` : ""}`,
-      ready,
-      hasDraft,
-      draft: draft ?? { body: "", meta: "" },
-      rotten: isRotten(deal),
-      rotLine: `${deal.days} days in ${stageOf(deal.stage).label}. The ${deal.line} limit is ${rotLimit(deal)} days, so this deal is already on the manager's exception list.`,
-      replyLine: ready
-        ? `The ${stageOf(deal.stage).label} gate is clear — ${deal.account.split(" ")[0]} can move to ${next?.label ?? "close"}.`
-        : `Not yet — the ${stageOf(deal.stage).label} gate needs ${criteria.length} criteria and ${blocked + drafted} ${blocked + drafted === 1 ? "is" : "are"} open. I filled what I could find in your call logs. **The rest needs you.**`,
-      footLine: ready
-        ? "Every criterion is met."
-        : `Advancement stays blocked until all ${criteria.length} clear.`,
+        ? "Logged as a call against the new deal."
+        : owner
+          ? "Ready to add."
+          : "Pick an owner first",
     };
   },
 };
 
 // ── 4 · The same board, different work ──────────────────────────────────
-// Proof the board isn't a sales screen: identical block, different rows.
-const SPRINT_ITEMS = [
-  { id: "w1", name: "Frappe CRM MCP — read tools", owner: "Nathan", state: "todo",
-    points: 8, area: "Backend", blockedDays: 0, blockLimit: 3 },
-  { id: "w2", name: "Canvas board renderer", owner: "Unassigned", state: "todo",
-    points: 5, area: "Frontend", blockedDays: 0, blockLimit: 3 },
-  { id: "w3", name: "Lead capture extraction", owner: "Magnus", state: "doing",
-    points: 8, area: "Backend", blockedDays: 4, blockLimit: 3 },
-  { id: "w4", name: "Stage gate rules seed", owner: "Nana", state: "doing",
-    points: 5, area: "Config", blockedDays: 0, blockLimit: 3 },
-  { id: "w5", name: "Maps MCP canvas handoff", owner: "Nana", state: "review",
-    points: 3, area: "Frontend", blockedDays: 0, blockLimit: 3 },
-  { id: "w6", name: "Graphs MCP candlestick", owner: "Nana", state: "done",
-    points: 8, area: "Frontend", blockedDays: 0, blockLimit: 3 },
+// Proof the board isn't a sales screen: identical block, different rows. For a
+// trades customer this is the other half of their week — the jobs themselves.
+const JOBS = [
+  { id: "j1", company: "Unit 4, Marlow Court", contact: "Boiler swap",
+    state: "scheduled", value: 1850, crew: "Team A", days: 0 },
+  { id: "j2", company: "Fairview Dental", contact: "Backflow test",
+    state: "scheduled", value: 420, crew: "Team B", days: 0 },
+  { id: "j3", company: "Rowan Street flats", contact: "Riser replacement",
+    state: "progress", value: 7400, crew: "Team A", days: 0 },
+  { id: "j4", company: "Kestrel Bakery", contact: "Grease trap",
+    state: "invoiced", value: 980, crew: "Team B", days: 12 },
+  { id: "j5", company: "Halcyon Gym", contact: "Shower block refit",
+    state: "paid", value: 5600, crew: "Team A", days: 0 },
 ];
 
-const SPRINT: AppDescriptor = {
-  id: "azure.sprint",
-  title: "Sprint 12",
-  subtitle: "{{ open }} items · same board block as your pipeline",
-  icon: "board",
-  triggers: ["show me the sprint", "the sprint board", "sprint board", "show the sprint"],
+const JOBS_APP: AppDescriptor = {
+  id: "ops.jobs",
+  title: "Jobs this week",
+  subtitle: "{{ count }} jobs · the same board, pointed at the work",
+  icon: "wrench",
+  triggers: ["show me the jobs", "the jobs board", "jobs this week", "show the jobs"],
   reply:
-    "Sprint 12 — **{{ open }} items, {{ points }} points**. One is blocked: lead capture extraction, four days now. Same board block as your pipeline, pointed at Azure.",
+    "**{{ count }} jobs** on this week, {{ valueLabel }} of work. Kestrel Bakery has been invoiced 12 days with no payment. This is the same board as your pipeline — different rows.",
   inline: [
     { type: "figures", items: [
-      { label: "Items", value: "$.open" },
-      { label: "Points", value: "$.points" },
-      { label: "Blocked", value: "$.flagged", warnWhenSet: true },
+      { label: "Jobs", value: "$.count" },
+      { label: "Value", value: "$.value", format: "currency.usd" },
+      { label: "Unpaid", value: "$.overdue", warnWhenSet: true },
     ] },
   ],
   canvas: [
     { type: "board",
-      data: "$.workItems",
+      data: "$.jobs",
       groupBy: "state",
       columnSets: {
         state: [
-          { value: "todo", label: "To do", meta: "not started" },
-          { value: "doing", label: "In progress", meta: "active" },
-          { value: "review", label: "In review", meta: "awaiting" },
-          { value: "done", label: "Done", meta: "closed" },
+          { value: "scheduled", label: "Scheduled", meta: "booked in" },
+          { value: "progress", label: "In progress", meta: "on site" },
+          { value: "invoiced", label: "Invoiced", meta: "awaiting payment" },
+          { value: "paid", label: "Paid", meta: "done" },
         ],
-        owner: [
-          { value: "Nathan", label: "Nathan", meta: "backend" },
-          { value: "Magnus", label: "Magnus", meta: "backend" },
-          { value: "Nana", label: "Nana", meta: "frontend" },
-          { value: "Unassigned", label: "Unassigned", meta: "—" },
+        crew: [
+          { value: "Team A", label: "Team A", meta: "three vans" },
+          { value: "Team B", label: "Team B", meta: "two vans" },
         ],
       },
-      rankBy: { field: "points", direction: "desc" },
+      rankBy: { field: "value", direction: "desc" },
       card: {
-        title: "{{ name }}",
-        subtitle: "{{ owner }}",
-        value: { field: "points", emptyLabel: "Unpointed" },
-        chips: ["{{ area }}"],
+        title: "{{ company }}",
+        subtitle: "{{ contact }}",
+        value: { field: "value", format: "currency.usd" },
+        chips: ["{{ crew }}"],
       },
-      flag: { field: "blockedDays", overField: "blockLimit", chip: "Blocked {{ blockedDays }}d" },
+      flag: { field: "days", over: 7, chip: "{{ days }} days unpaid" },
       emptyLabel: "Nothing here",
     },
   ],
-  actions: [{ label: "Group by owner", do: { kind: "rebind", groupBy: "owner" } }],
-  footNote: "Read from Azure DevOps · just now",
+  actions: [{ label: "Group by crew", do: { kind: "rebind", groupBy: "crew" } }],
+  footNote: "Same board block as the pipeline — no new code, just different rows.",
   data: () => ({
-    open: SPRINT_ITEMS.length,
-    points: SPRINT_ITEMS.reduce((n, w) => n + w.points, 0),
-    flagged: SPRINT_ITEMS.filter((w) => w.blockedDays > w.blockLimit).length,
-    workItems: SPRINT_ITEMS,
+    count: JOBS.length,
+    value: JOBS.reduce((n, j) => n + j.value, 0),
+    valueLabel: `$${JOBS.reduce((n, j) => n + j.value, 0).toLocaleString("en-US")}`,
+    overdue: JOBS.filter((j) => j.days > 7).length,
+    jobs: JOBS,
   }),
 };
 
-export const MCP_APPS: AppDescriptor[] = [PIPELINE, LEAD, GATE, SPRINT];
+export const MCP_APPS: AppDescriptor[] = [PIPELINE, DEAL, LEAD, JOBS_APP];
 
 export const getApp = (id?: string) => MCP_APPS.find((a) => a.id === id);
 

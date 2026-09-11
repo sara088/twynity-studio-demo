@@ -37,8 +37,7 @@ import { CanvasPanel } from "./CanvasPanel";
 import { McpAppPanel, type AppFrame } from "./McpAppPanel";
 import { getApp, matchApp, type AppDescriptor, type Intent } from "../data/mcp-apps";
 import {
-  advanceDeal, approveDraft, assignLeadOwner, convertLead, createLead, getCrm,
-  logInteraction, resetCrm, resolveDuplicate,
+  assignLeadOwner, createLead, getCrm, logActivity, moveDeal, resetCrm,
 } from "../lib/crm-store";
 import { ChatThread } from "./ChatThread";
 import { ChatInput } from "./ChatInput";
@@ -606,48 +605,41 @@ export function TalkView({ twyn, initialMode }: { twyn: Twyn; initialMode?: Star
     if (intent.kind !== "tool") return;
     const deal = intent.deal;
     switch (intent.op) {
-      case "approveDraft":
-        if (deal) { approveDraft(deal); pushTwyn("Approved — the timeline driver is on the deal."); }
-        break;
-      case "logInteraction":
-        if (deal) { logInteraction(deal); pushTwyn("Logged the call. That was the last thing only you could do."); }
-        break;
-      case "advance": {
-        if (!deal) break;
-        const to = advanceDeal(deal);
-        pushTwyn(
-          to
-            ? `Moved to **${to.label}**. The board's updated and the new stage has its own gate.`
-            : "Not yet — something on the gate is still open."
-        );
-        // The gate's job is done; drop back to the board so the move is visible.
-        if (to) goBackInCanvas();
+      case "move": {
+        if (!deal || !intent.value) break;
+        const before = getCrm().deals.find((d) => d.id === deal);
+        const to = moveDeal(deal, intent.value as never);
+        if (to && before)
+          pushTwyn(
+            `Moved **${before.company}** to ${to.label} — ${to.meaning}. Logged it against the deal.`
+          );
         break;
       }
-      case "resolveDuplicate":
-        if (intent.value === "linked" || intent.value === "separate") {
-          resolveDuplicate(intent.value);
-          pushTwyn(
-            intent.value === "linked"
-              ? "Linked to the existing Ashanti Gold Ltd account."
-              : "I'll create Ashanti Gold Refinery as a separate company."
-          );
-        }
+      case "logCall": {
+        if (!deal) break;
+        const d = getCrm().deals.find((x) => x.id === deal);
+        logActivity(deal, "call", "Called and spoke — logged from the studio.");
+        if (d) pushTwyn(`Logged a call against **${d.company}**. Clock's reset.`);
         break;
+      }
+      case "logMeeting": {
+        if (!deal) break;
+        const d = getCrm().deals.find((x) => x.id === deal);
+        logActivity(deal, "meeting", "Meeting held — logged from the studio.");
+        if (d) pushTwyn(`Logged a meeting against **${d.company}**.`);
+        break;
+      }
       case "assignOwner":
-        if (intent.value) { assignLeadOwner(intent.value); }
+        if (intent.value) assignLeadOwner(intent.value);
         break;
-      case "createLead":
-        if (createLead()) pushTwyn("Lead created. Want me to convert it to an opportunity?");
-        break;
-      case "convertLead": {
-        const made = convertLead();
-        if (made) pushTwyn(`Converted — **${made.account}** is on your board in Identified.`);
+      case "createLead": {
+        const made = createLead();
+        if (made) pushTwyn(`Added **${made.company}** to the board in Called.`);
         break;
       }
       case "reset":
         resetCrm();
-        pushTwyn("Demo pipeline reset to its starting state.");
+        pushTwyn("Demo reset — back to six deals, Bob's still gone quiet.");
         break;
     }
   };
