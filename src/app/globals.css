@@ -1,0 +1,416 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* =========================================================================
+   Twynity design tokens — sourced from the original prototype's :root vars.
+   Two systems live here:
+   1. Project tokens (--violet, --dark, --gray-*, etc.) — used directly via
+      Tailwind utilities like `bg-violet`, `text-gray-3`, `border-border`.
+   2. shadcn semantic tokens (--background, --primary, etc.) — re-pointed to
+      project tokens so shadcn components inherit the Twynity look.
+   ========================================================================= */
+
+:root {
+  /* =====================================================================
+     CANONICAL DESIGN TOKENS — authoritative per migration-spec/02-tokens.md.
+     Where the current values ever drifted from the prototype, the spec wins.
+     ===================================================================== */
+
+  /* Brand */
+  --violet: #6c5ce7;
+  --violet-h: #5a4bd6;          /* CTA hover (spec name; old alias: --violet-hover) */
+  --violet-light: #f5f3ff;
+  --violet-mid: #eeeaff;
+  --lavender: #f0eefa;          /* page-wash / landing accent */
+
+  /* Neutrals */
+  --dark: #0f0f1e;
+  --gray-2: #3c3c58;
+  --gray-3: #6a6a88;
+  --gray-4: #8a8aa8;
+  --gray-5: #aaaabe;
+  --gray-6: #c8c8dc;
+
+  /* Surfaces */
+  --border-default: #ededf3;    /* spec wins (was #eaeaf4 — drifted from prototype) */
+  --bg-input: #fafafe;
+
+  /* Status / accent washes */
+  --mint: #e8f5ee;
+  --mint-text: #16a34a;
+  --amber: #fef3c7;
+  --amber-text: #b45309;
+  --peach: #fff5f0;             /* landing accent wash */
+  --butter: #fefce8;            /* landing accent wash */
+  --soft-blue: #eff6ff;         /* landing accent wash */
+
+  /* Radii */
+  --r-card: 20px;
+  --r-btn: 99px;
+  --r-input: 14px;
+  --r-chip: 99px;
+
+  /* Motion */
+  --ease-soft: cubic-bezier(0.22, 0.8, 0.26, 1);
+
+  /* ---------------------------------------------------------------------
+     APP-ONLY tokens — used by the current app but NOT in 02-tokens.md.
+     Kept so surviving pages compile; revisit as each page is rebuilt.
+     --------------------------------------------------------------------- */
+  --bg-canvas: #efeff5;
+  --bg-page: #f3f2f8;
+  --bg-content: #f8f8fb;
+  --success: #00c98d;
+  --error: #ef4444;
+
+  /* Landing-only decorative colors (the dark media panel). The soft page
+     washes use --mint / --lavender directly (see BgWash). */
+  --video-panel-from: #1a1a2e;
+  --video-panel-to: #2d1b5e;
+
+  /* Category-tag accents (landing path cards) — exact prototype values, more
+     saturated than the mint/amber status washes. */
+  --tag-green: #e4fbc8;
+  --tag-green-text: #436a1f;
+  --tag-amber: #ffedc8;
+  --tag-amber-text: #7a4a1b;
+  --accent-blue: #62a6f0; /* org-chart alt avatar */
+
+  /* Skills (indigo) loadout-chip color — caps use violet, interconnectors amber,
+     knowledge mint; skills need a distinct indigo not in the base palette. */
+  --skill-bg: #eef2ff;
+  --skill-border: #c7d2fe;
+  --skill-text: #4338ca;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
+
+  /* ---------------------------------------------------------------------
+     shadcn semantic tokens — re-pointed to canonical tokens so shadcn
+     components inherit the Twynity look. Required by shadcn — do not remove.
+     --------------------------------------------------------------------- */
+  --background: #ffffff;
+  --foreground: var(--dark);
+  --card: #ffffff;
+  --card-foreground: var(--dark);
+  --popover: #ffffff;
+  --popover-foreground: var(--dark);
+  --primary: var(--violet);
+  --primary-foreground: #ffffff;
+  --secondary: var(--bg-input);
+  --secondary-foreground: var(--dark);
+  --muted: var(--bg-input);
+  --muted-foreground: var(--gray-3);
+  --accent: var(--violet-light);
+  --accent-foreground: var(--violet);
+  --destructive: var(--error);
+  --destructive-foreground: #ffffff;
+  --border: var(--border-default);
+  --input: var(--border-default);
+  --ring: var(--violet);
+  --radius: 0.625rem;
+
+  /* ---------------------------------------------------------------------
+     RAW-VAR back-compat aliases — a few surviving components read these
+     raw vars in inline styles. Same value as canonical tokens above.
+     TODO (after page-13 ships): remove once no JSX references them.
+     --------------------------------------------------------------------- */
+  --border-color: var(--border-default); /* DepthRing, FlowShell inline styles */
+}
+
+@theme inline {
+  /* === Canonical color tokens (02-tokens.md) — bg-violet, text-gray-3, etc. === */
+  --color-violet: var(--violet);
+  --color-violet-h: var(--violet-h);
+  --color-violet-light: var(--violet-light);
+  --color-violet-mid: var(--violet-mid);
+  --color-lavender: var(--lavender);
+
+  --color-dark: var(--dark);
+  --color-gray-2: var(--gray-2);
+  --color-gray-3: var(--gray-3);
+  --color-gray-4: var(--gray-4);
+  --color-gray-5: var(--gray-5);
+  --color-gray-6: var(--gray-6);
+
+  --color-border-default: var(--border-default);
+  --color-bg-input: var(--bg-input);
+
+  --color-mint: var(--mint);
+  --color-mint-text: var(--mint-text);
+  --color-amber: var(--amber);
+  --color-amber-text: var(--amber-text);
+  --color-peach: var(--peach);
+  --color-butter: var(--butter);
+  --color-soft-blue: var(--soft-blue);
+
+  /* === App-only colors (not in 02-tokens.md) === */
+  --color-bg-canvas: var(--bg-canvas);
+  --color-bg-page: var(--bg-page);
+  --color-bg-content: var(--bg-content);
+  --color-success: var(--success);
+  --color-error: var(--error);
+  --color-tag-green: var(--tag-green);
+  --color-tag-green-text: var(--tag-green-text);
+  --color-tag-amber: var(--tag-amber);
+  --color-tag-amber-text: var(--tag-amber-text);
+  --color-accent-blue: var(--accent-blue);
+  --color-skill-bg: var(--skill-bg);
+  --color-skill-border: var(--skill-border);
+  --color-skill-text: var(--skill-text);
+
+  /* === shadcn semantic colors — required by shadcn, do not remove === */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* === Fonts — wired via next/font in lib/fonts.ts (not literal family names) === */
+  --font-sans: var(--font-dm-sans);
+  --font-heading: var(--font-syne);
+  --font-inter: var(--font-inter);
+
+  /* === Canonical radii (02-tokens.md) — rounded-card, rounded-btn, etc. === */
+  --radius-card: var(--r-card);
+  --radius-btn: var(--r-btn);
+  --radius-input: var(--r-input);
+  --radius-chip: var(--r-chip);
+
+  /* === App-only radii (not in 02-tokens.md) === */
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+
+  /* === Motion === */
+  --ease-soft: var(--ease-soft);
+
+  /* =====================================================================
+     BACK-COMPAT ALIASES — old token names kept so the ~130 existing JSX
+     references still compile. Same values as the canonical tokens above.
+     TODO (after page-13 ships): remove once no JSX references them.
+     ===================================================================== */
+  --color-violet-hover: var(--violet-h);   /* -> bg-violet-hover  (canonical: violet-h) */
+  --color-input-bg: var(--bg-input);       /* -> bg-input-bg      (canonical: bg-input) */
+  --radius-pill: var(--r-btn);             /* -> rounded-pill     (canonical: rounded-btn) */
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background: var(--bg-page);
+    color: var(--dark);
+    font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-variant-numeric: tabular-nums;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* Interactive elements get a pointer cursor (Tailwind v4 preflight doesn't). */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  label[for],
+  summary {
+    cursor: pointer;
+  }
+}
+
+@layer utilities {
+  .font-heading {
+    font-family: var(--font-syne), var(--font-dm-sans), sans-serif;
+  }
+
+  /* Hide scrollbars but keep scrolling */
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Subtle scrollbar variant */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-default) transparent;
+  }
+
+  /* Hover-lift used on most cards in the prototype */
+  .hover-lift {
+    transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 28px rgba(15, 15, 30, 0.06);
+  }
+}
+
+/* Live-status pulse used on talk page video panel */
+@keyframes twynity-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.85);
+  }
+}
+
+.animate-status-pulse {
+  animation: twynity-pulse 2s ease-in-out infinite;
+}
+
+/* Typing dot animation for chat */
+@keyframes twynity-typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+.animate-typing-dot {
+  animation: twynity-typing 1.2s ease-in-out infinite;
+}
+
+/* Box-shadow ring pulse — used on the "Your twyn is live" eyebrow dot */
+@keyframes live-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(108, 92, 231, 0.55); }
+  55%       { box-shadow: 0 0 0 6px rgba(108, 92, 231, 0); }
+}
+
+.twyn-live-dot {
+  animation: live-pulse 2.2s ease-out infinite;
+}
+
+/* Onboarding step cross-fade (200ms) — a one-shot fade, not a loop */
+@keyframes onb-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Studio Browse & Add drawer — materialize in place (fade + slight rise + tiny
+   scale, NOT a slide). Raw/unlayered so it overrides shadcn Dialog's default
+   zoom/fade utilities. Exact values from the prototype's .bd-drawer. */
+@keyframes bd-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.985); }
+  88%  { opacity: 1; }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes bd-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(12px) scale(0.985); }
+}
+.bd-drawer { will-change: transform, opacity; }
+.bd-drawer[data-state="open"] { animation: bd-in 250ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+.bd-drawer[data-state="closed"] { animation: bd-out 220ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+
+/* Talk page audio-mode waveform bars */
+@keyframes talk-wave {
+  from { transform: scaleY(0.45); opacity: 0.45; }
+  to   { transform: scaleY(1.1); opacity: 1; }
+}
+
+/* Studio video↔chat resize handle. The panel width is written directly by JS
+   during drag (no React state, no width transition) — see TalkView. */
+.resize-handle {
+  width: 18px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.resize-handle::before {
+  content: "";
+  width: 3px;
+  height: 36px;
+  border-radius: 9999px;
+  background: var(--color-border-default);
+  transition: background 0.15s, height 0.15s;
+}
+.resize-handle:hover::before,
+.resize-handle.is-active::before {
+  background: var(--color-violet);
+  height: 48px;
+}
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  inset: 0 6px;
+}
+body.is-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+/* Kill the canvas open/close width animation while dragging so resize is 1:1. */
+body.is-resizing .canvas-pane {
+  transition: none !important;
+}
+
+/* Marketplace "coming soon" row — community twyns are visible but inert:
+   dimmed, desaturated, and non-interactive (no hover, no clicks). */
+.is-soon-row {
+  opacity: 0.55;
+  filter: grayscale(0.35);
+  pointer-events: none;
+  user-select: none;
+  cursor: not-allowed;
+}
+
+/* Onboarding tour — spotlight cutout (dim everything except the target). The
+   huge box-shadow paints the backdrop; the element itself is the bright hole. */
+.tour-spot {
+  position: fixed;
+  border-radius: 14px;
+  box-shadow: 0 0 0 9999px rgba(15, 15, 30, 0.55);
+  outline: 2px solid var(--color-violet);
+  outline-offset: 2px;
+  pointer-events: none;
+  z-index: 91;
+  transition: left 0.22s var(--ease-soft), top 0.22s var(--ease-soft),
+    width 0.22s var(--ease-soft), height 0.22s var(--ease-soft);
+}

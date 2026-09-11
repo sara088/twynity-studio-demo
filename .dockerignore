@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+.git
+.gitignore
+*.md
+*.log
+.env*
+k8s
+docker
+.netlify
