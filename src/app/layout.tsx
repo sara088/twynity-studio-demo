@@ -27,10 +27,9 @@ export default function RootLayout({
       lang="en"
       className={`${dmSans.variable} ${syne.variable} ${inter.variable}`}
     >
-      {/* Runtime env vars injected by docker/env.sh — only present in containerised deployments */}
-      <head>
-        <script src="/env-config.js" />
-      </head>
+      {/* The containerised build injects runtime env vars here via docker/env.sh.
+          This is a static export with nothing to inject, and the script 404s
+          under the Pages base path. */}
       <body>
         <TooltipProvider>{children}</TooltipProvider>
         <Toaster position="top-right" visibleToasts={5} />
