@@ -1410,7 +1410,9 @@ export function TalkView({ twyn, initialMode }: { twyn: Twyn; initialMode?: Star
 
       {/* Prototype-only: flip between hard-to-reach states (tier, avatar
           training/failed, out of credits) for demos and dev. Not product UI. */}
-      <DevStatePanel />
+      {/* Dev-only: the State panel forces tiers, limits and avatar states. A
+          debugging aid, not something to leave on screen during a client call. */}
+      {process.env.NODE_ENV !== "production" && <DevStatePanel />}
     </>
   );
 }
