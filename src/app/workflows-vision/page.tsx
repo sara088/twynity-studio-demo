@@ -344,7 +344,7 @@ function EquipMock() {
           S
         </span>
         <div>
-          <div className="font-heading text-[15px] font-bold text-dark">Virtual Sara</div>
+          <div className="font-heading text-[15px] font-bold text-dark">Virtual Bob</div>
           <div className="text-[12px] text-gray-4">Your twyn · loadout</div>
         </div>
         <span className="ml-auto flex items-center gap-1.5 rounded-full bg-violet-light px-2.5 py-1 text-[11px] font-bold text-violet">
@@ -458,7 +458,7 @@ function StudioRun() {
         <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
         <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
         <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
-        <span className="ml-2 text-[12px] font-semibold text-gray-4">Studio · Virtual Sara</span>
+        <span className="ml-2 text-[12px] font-semibold text-gray-4">Studio · Virtual Bob</span>
         <span className="ml-auto flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-violet ring-1 ring-border">
           <CircleDot size={11} /> Split view
         </span>

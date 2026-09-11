@@ -3,9 +3,11 @@ import type { Twyn } from "../types";
 export const TWYNS: Twyn[] = [
   {
     id: "sara",
-    name: "Virtual Sara",
-    role: "Graduate Executive",
-    portrait: "/assets/sara.png",
+    name: "Virtual Bob",
+    role: "Sales Rep",
+    // Frame pulled from the replica video, so the still and the avatar on the
+    // stage are unmistakably the same person.
+    portrait: "/assets/bob.png",
     createdLabel: "May 12",
     status: "online",
     earningsMtd: 1240,

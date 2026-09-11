@@ -306,7 +306,7 @@ function ChatContext({ children }: { children: React.ReactNode }) {
         </span>
         <div className="min-w-0 flex-1">
           <div className="mb-1.5 text-[12.5px] text-gray-4">
-            <span className="font-semibold text-dark">Virtual Sara</span> · just now
+            <span className="font-semibold text-dark">Virtual Bob</span> · just now
           </div>
           <p className="mb-3 max-w-[560px] text-[13.5px] leading-[1.5] text-gray-2">
             I pulled the latest on your three main competitors — here&apos;s the snapshot.

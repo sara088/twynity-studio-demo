@@ -492,7 +492,7 @@ function TeamsSection() {
             <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-light px-2.5 py-1 text-[11px] font-bold text-violet"><Bot size={12} /> Orchestrated</span>
           </div>
           <div className="mt-4 space-y-2">
-            <TeamMember name="Virtual Sara" role="Lead the brief · your voice" owner="you" initials="VS" you />
+            <TeamMember name="Virtual Bob" role="Lead the brief · your voice" owner="you" initials="VS" you />
             <TeamMember name="Research twyn" role="Market + competitor research" owner="@chenwei" initials="RT" />
             <TeamMember name="Design twyn" role="Layout & visuals" owner="@maria" initials="DT" />
           </div>

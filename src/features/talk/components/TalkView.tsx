@@ -839,7 +839,10 @@ export function TalkView({ twyn, initialMode }: { twyn: Twyn; initialMode?: Star
   // Suppressed by ?tour=off (dev/demo — the tour gets tiresome on repeat visits).
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("tour");
-    if (t === "off") return;
+    // Demo build: the tour is opt-in. It fires on every visit in the product and
+    // takes over the screen, which is wrong when someone is walking a client
+    // through this. ?tour=on still runs it; ?tour=workflows still jumps ahead.
+    if (t !== "on" && t !== "workflows") return;
     // Dev/demo: ?tour=workflows jumps straight to the workflow chapter (skips the
     // connect-tools steps + their OAuth), so the guided run is quick to show.
     if (t === "workflows") {

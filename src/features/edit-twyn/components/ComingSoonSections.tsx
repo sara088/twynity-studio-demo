@@ -1,7 +1,7 @@
 // Future phases — permanently-collapsed teasers (title + "Soon" only). These
 // are not expandable; they just signal what's coming.
 const SOON_SECTIONS = [
-  "Sharpen Virtual Sara",
+  "Sharpen Virtual Bob",
   "Captured facts",
   "Identity & status",
 ];

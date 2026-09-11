@@ -12,7 +12,7 @@ export interface RosterTwyn {
 
 export const ROSTER: RosterTwyn[] = [
   // Your twyns (mirror /my-twyns)
-  { id: "sara", name: "Virtual Sara", role: "Graduate Executive", portrait: "/assets/sara.png", owned: true },
+  { id: "sara", name: "Virtual Bob", role: "Sales Rep", portrait: "/assets/bob.png", owned: true },
   { id: "elena", name: "Virtual Elena", role: "Strategy Consultant", portrait: "/assets/persona-consult-f.png", owned: true },
   { id: "priya", name: "Virtual Priya", role: "Growth Lead", portrait: "/assets/persona-prof-f.png", owned: true },
   // Purchased from the marketplace
